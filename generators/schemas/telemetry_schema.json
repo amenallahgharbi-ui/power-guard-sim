@@ -1,0 +1,55 @@
+{
+  "$id": "io.power-guard-sim.telemetry",
+  "type": "object",
+  "required": [
+    "ts",
+    "asset_id",
+    "voltage_v",
+    "current_a",
+    "temperature_c",
+    "soc_pct",
+    "profile"
+  ],
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "asset_id": {
+      "type": "string",
+      "minLength": 8
+    },
+    "voltage_v": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 400
+    },
+    "current_a": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2000
+    },
+    "temperature_c": {
+      "type": "number",
+      "minimum": -40,
+      "maximum": 85
+    },
+    "soc_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "profile": {
+      "type": "string",
+      "enum": [
+        "nominal",
+        "drift_slow",
+        "thermal_spike",
+        "step_change"
+      ]
+    },
+    "sig": {
+      "type": "string"
+    }
+  }
+}

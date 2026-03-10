@@ -1,0 +1,63 @@
+meta:
+  seed: 43
+  sampling_seconds: 60
+  duration_days: 7
+  start_ts_utc: "2026-02-08T00:00:00Z"
+
+assets:
+  - asset_id: "asset_A1"
+    site_id: "site_01"
+    nominal: { voltage_base_v: 53.2, current_base_a: 2.2, temperature_base_c: 28.0, soc_start_pct: 88.0 }
+  - asset_id: "asset_A2"
+    site_id: "site_01"
+    nominal: { voltage_base_v: 52.9, current_base_a: 2.7, temperature_base_c: 29.0, soc_start_pct: 84.0 }
+  - asset_id: "asset_A3"
+    site_id: "site_02"
+    nominal: { voltage_base_v: 53.6, current_base_a: 1.9, temperature_base_c: 27.0, soc_start_pct: 90.0 }
+  - asset_id: "asset_A4"
+    site_id: "site_02"
+    nominal: { voltage_base_v: 52.7, current_base_a: 3.1, temperature_base_c: 30.5, soc_start_pct: 82.0 }
+  - asset_id: "asset_A5"
+    site_id: "site_03"
+    nominal: { voltage_base_v: 53.0, current_base_a: 2.4, temperature_base_c: 28.5, soc_start_pct: 86.0 }
+
+profile_nominal:
+  voltage_daily_amp_v: 0.6
+  current_daily_amp_a: 0.9
+  temperature_daily_amp_c: 4.5
+  noise_sigma: { voltage_v: 0.10, current_a: 0.08, temperature_c: 0.25, soc_pct: 0.05 }
+  random_walk_sigma: { voltage_v: 0.004, current_a: 0.003, temperature_c: 0.01 }
+
+anomalies:
+  anomaly_rate_per_asset:
+    min_pct: 5.0
+    max_pct: 8.0
+
+  drift_slow:
+    enabled: true
+    pct_increase_min: 5.0
+    pct_increase_max: 15.0
+    duration_hours_min: 4
+    duration_hours_max: 48
+    target: "current_a"
+
+  thermal_spike:
+    enabled: true
+    temp_increase_c_min: 10.0
+    temp_increase_c_max: 25.0
+    duration_minutes_min: 5
+    duration_minutes_max: 20
+
+  step_change:
+    enabled: true
+    pct_increase_min: 10.0
+    pct_increase_max: 20.0
+    # NEW: instant start but LIMITED duration (not until end)
+    duration_minutes_min: 30
+    duration_minutes_max: 180
+    target: "current_a"
+
+output:
+  dir: "data/synthetic_csv"
+  jsonl_file: "anomaly_week.jsonl"
+  csv_file: "anomaly_week.csv"
