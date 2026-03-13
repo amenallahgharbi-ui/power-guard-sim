@@ -26,3 +26,23 @@ services:
       ls -la preprocess;
       pip install --no-cache-dir requests;
       python -u preprocess/job.py"
+
+  alert-engine:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+    env_file:
+      - ./ingest/api/.env
+    environment:
+      - ALERTS_SLEEP_SECONDS=60
+      - ALERTS_LOOKBACK_MINUTES=43200
+      - ALERTS_HYSTERESIS_N=3
+      - ALERTS_EWMA_ALPHA=0.2
+      - CALIB_J0=2026-02-01
+      - CALIB_J7=2026-02-08
+    command: >
+      sh -c "cd alerts/engine
+      && npm install --silent
+      && npm run start"
+
