@@ -4,3 +4,15 @@
 
 secrets/
 
+
+.venv/
+
+
+**/node_modules/
+
+
+secrets/
+
+
+ingest/api/.env
+
