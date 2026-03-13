@@ -16,3 +16,12 @@ secrets/
 
 ingest/api/.env
 
+
+# Node/Next
+**/node_modules/
+**/.next/
+
+
+# Local env files
+**/.env.local
+
