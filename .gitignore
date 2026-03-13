@@ -32,3 +32,6 @@ postcss.config.mjs
 # Local env files
 ingest/api/.env
 
+
+*.bak
+
