@@ -25,3 +25,10 @@ ingest/api/.env
 # Local env files
 **/.env.local
 
+
+postcss.config.mjs
+
+
+# Local env files
+ingest/api/.env
+
