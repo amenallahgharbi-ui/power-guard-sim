@@ -24,6 +24,10 @@ function asText(v: any) {
   }
 }
 
+function rowKey(r: JournalRow) {
+  return `${r.ts}::${r.payload_hash}`;
+}
+
 export default function JournalPage() {
   const [rows, setRows] = useState<JournalRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -31,6 +35,12 @@ export default function JournalPage() {
 
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<JournalRow | null>(null);
+
+  // email export UI state
+  const [email, setEmail] = useState("");
+  const [selectedKeys, setSelectedKeys] = useState<Record<string, boolean>>({});
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -40,15 +50,29 @@ export default function JournalPage() {
       if (!res.ok) throw new Error(`GET /api/journal failed: ${res.status}`);
       const data = (await res.json()) as JournalRow[];
       setRows(data);
+
       // keep selection if possible
       if (selected) {
-        const still = data.find((r) => r.payload_hash === selected.payload_hash && r.ts === selected.ts);
+        const still = data.find(
+          (r) => r.payload_hash === selected.payload_hash && r.ts === selected.ts,
+        );
         setSelected(still ?? null);
       }
+
+      // prune selectedKeys when data refreshes
+      setSelectedKeys((prev) => {
+        const next: Record<string, boolean> = {};
+        for (const r of data) {
+          const k = rowKey(r);
+          if (prev[k]) next[k] = true;
+        }
+        return next;
+      });
     } catch (e: any) {
       setErr(e?.message ?? String(e));
       setRows([]);
       setSelected(null);
+      setSelectedKeys({});
     } finally {
       setLoading(false);
     }
@@ -77,6 +101,84 @@ export default function JournalPage() {
       return hay.includes(needle);
     });
   }, [rows, q]);
+
+  const selectedRows = useMemo(() => {
+    const ks = selectedKeys;
+    return filtered.filter((r) => ks[rowKey(r)]);
+  }, [filtered, selectedKeys]);
+
+  const allFilteredSelected =
+    filtered.length > 0 && selectedRows.length === filtered.length;
+
+  function toggleRow(r: JournalRow) {
+    const k = rowKey(r);
+    setSelectedKeys((prev) => ({ ...prev, [k]: !prev[k] }));
+  }
+
+  function toggleSelectAllFiltered() {
+    if (filtered.length === 0) return;
+    setSelectedKeys((prev) => {
+      const next = { ...prev };
+      const shouldSelect = !allFilteredSelected;
+      for (const r of filtered) next[rowKey(r)] = shouldSelect;
+
+      // if unselecting, delete keys to keep object small
+      if (!shouldSelect) {
+        for (const r of filtered) delete next[rowKey(r)];
+      }
+      return next;
+    });
+  }
+
+  async function sendCsv() {
+    setSendMsg(null);
+    setErr(null);
+
+    const rowsToSend = selectedRows.length > 0 ? selectedRows : filtered;
+
+    if (!email.trim()) {
+      setSendMsg("Please enter an email.");
+      return;
+    }
+    if (rowsToSend.length === 0) {
+      setSendMsg("No rows to export.");
+      return;
+    }
+
+    setSending(true);
+    try {
+      const res = await fetch("/api/journal/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          filename: "signed_journal.csv",
+          rows: rowsToSend,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const e =
+          typeof data?.error === "string"
+            ? data.error
+            : data?.error
+              ? JSON.stringify(data.error)
+              : `Send failed: ${res.status}`;
+        throw new Error(e);
+      }
+
+      const idInfo =
+        typeof data?.id === "string" && data.id ? ` (id: ${data.id})` : "";
+
+      setSendMsg(`Sent ${rowsToSend.length} rows to ${email.trim()}.${idInfo}`);
+    } catch (e: any) {
+      setSendMsg(`Error: ${e?.message ?? String(e)}`);
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -111,6 +213,45 @@ export default function JournalPage() {
         </div>
       </div>
 
+      {/* email export bar */}
+      <div className="flex flex-wrap items-center gap-2 rounded border bg-white p-3">
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email (e.g. you@example.com)"
+          className="w-full md:w-[360px] rounded border bg-white px-3 py-2 text-sm"
+        />
+
+        <button
+          onClick={toggleSelectAllFiltered}
+          className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
+          disabled={filtered.length === 0}
+          title="Select or unselect all filtered rows"
+        >
+          {allFilteredSelected ? "Unselect all filtered" : "Select all filtered"}
+        </button>
+
+        <button
+          onClick={sendCsv}
+          disabled={sending || filtered.length === 0}
+          className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-60"
+          title="Send selected rows (or all filtered if nothing selected) as CSV to the provided email"
+        >
+          {sending ? "Sending..." : "Envoyer CSV"}
+        </button>
+
+        <div className="text-xs text-gray-500">
+          Selected: <span className="font-medium text-gray-900">{selectedRows.length}</span>
+          {selectedRows.length === 0 ? (
+            <span className="text-gray-400"> (will send all filtered)</span>
+          ) : null}
+        </div>
+
+        {sendMsg ? (
+          <div className="w-full text-sm text-gray-700">{sendMsg}</div>
+        ) : null}
+      </div>
+
       {err && <div className="text-sm text-red-600">Error: {err}</div>}
       {loading && <div className="text-sm text-gray-600">Loading…</div>}
 
@@ -119,6 +260,14 @@ export default function JournalPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100 text-left">
               <tr>
+                <th className="p-2 w-[42px]">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFiltered}
+                    aria-label="Select all filtered"
+                  />
+                </th>
                 <th className="p-2">ts</th>
                 <th className="p-2">actor</th>
                 <th className="p-2">event</th>
@@ -134,20 +283,30 @@ export default function JournalPage() {
                 const ok = r.verified_runtime !== false;
                 const msg =
                   r.payload?.payload?.message ??
-                  r.payload?.payload?.payload?.message ?? // just in case of nested event wrappers
+                  r.payload?.payload?.payload?.message ??
                   r.payload?.message ??
                   "";
 
-                const isSelected =
+                const isInspectSelected =
                   selected?.payload_hash === r.payload_hash && selected?.ts === r.ts;
+
+                const checked = !!selectedKeys[rowKey(r)];
 
                 return (
                   <tr
                     key={`${r.ts}-${r.payload_hash}-${i}`}
-                    className={`border-t cursor-pointer ${isSelected ? "bg-blue-50" : ""}`}
-                    onClick={() => setSelected(r)}
+                    className={`border-t ${isInspectSelected ? "bg-blue-50" : ""}`}
                     title="Click to view payload"
+                    onClick={() => setSelected(r)}
                   >
+                    <td className="p-2" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleRow(r)}
+                        aria-label="Select row"
+                      />
+                    </td>
                     <td className="p-2 whitespace-nowrap">{new Date(r.ts).toISOString()}</td>
                     <td className="p-2">{r.actor}</td>
                     <td className="p-2">{r.event_type}</td>
@@ -175,7 +334,7 @@ export default function JournalPage() {
 
               {filtered.length === 0 && !loading && (
                 <tr>
-                  <td className="p-4 text-gray-600" colSpan={7}>
+                  <td className="p-4 text-gray-600" colSpan={8}>
                     No matching events.
                   </td>
                 </tr>
@@ -188,7 +347,9 @@ export default function JournalPage() {
           <div className="border-b p-3 font-medium">Event payload</div>
           <div className="p-3">
             {!selected ? (
-              <div className="text-sm text-gray-600">Click a row to inspect details.</div>
+              <div className="text-sm text-gray-600">
+                Click a row to inspect details.
+              </div>
             ) : (
               <pre className="text-xs whitespace-pre-wrap break-words bg-gray-50 border rounded p-3 overflow-auto max-h-[70vh]">
                 {JSON.stringify(selected.payload, null, 2)}
